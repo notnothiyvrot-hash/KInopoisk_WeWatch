@@ -23,18 +23,18 @@ class MainActivity : ComponentActivity() {
         setContent {
             val navController = rememberNavController()
             val viewModel: MainViewModel = viewModel()
-            val movies by viewModel.movies.collectAsState(initial = emptyList())
+            val state by viewModel.state.collectAsState()
 
             NavHost(navController = navController, startDestination = "main_screen") {
 
                 // Экран 1: Список
                 composable("main_screen") {
-                    MainScreen(navController, viewModel, movies)
+                    MainScreen(navController, viewModel, state)
                 }
 
                 // Экран 2: Добавление
                 composable("add_screen") {
-                    AddScreen(navController, viewModel)
+                    AddScreen(navController, viewModel, state)
                 }
 
                 // Экран 3: Поиск
@@ -43,7 +43,7 @@ class MainActivity : ComponentActivity() {
                     arguments = listOf(navArgument("query") { type = NavType.StringType })
                 ) { backStackEntry ->
                     val query = backStackEntry.arguments?.getString("query") ?: ""
-                    SearchScreen(navController, viewModel, query)
+                    SearchScreen(navController, viewModel, state, query)
                 }
             }
         }

@@ -32,14 +32,14 @@ const val API_KEY = "12ba6e9d"
 fun MainScreen(
     navController: NavController,
     viewModel: MainViewModel,
-    movies: List<MovieEntity>
+    state: MainState
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Мои фильмы") },
                 actions = {
-                    IconButton(onClick = { viewModel.deleteSelected() }) {
+                    IconButton(onClick = { viewModel.handleIntent(MainIntent.DeleteSelected) }) {
                         Icon(Icons.Default.Delete, contentDescription = "Удалить выбранные")
                     }
                 }
@@ -51,6 +51,7 @@ fun MainScreen(
             }
         }
     ) { padding ->
+        val movies = state.movies
         if (movies.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -61,7 +62,12 @@ fun MainScreen(
         } else {
             LazyColumn(modifier = Modifier.padding(padding)) {
                 items(movies) { movie ->
-                    MovieItem(movie = movie, viewModel = viewModel)
+                    val isSelected = state.selectedMovies.contains(movie)
+                    MovieItem(
+                        movie = movie, 
+                        isSelected = isSelected,
+                        onToggleSelection = { viewModel.handleIntent(MainIntent.ToggleSelection(movie)) }
+                    )
                 }
             }
         }
@@ -69,8 +75,11 @@ fun MainScreen(
 }
 
 @Composable
-fun MovieItem(movie: MovieEntity, viewModel: MainViewModel) {
-    var isChecked by remember { mutableStateOf(false) }
+fun MovieItem(
+    movie: MovieEntity, 
+    isSelected: Boolean,
+    onToggleSelection: () -> Unit
+) {
     val context = LocalContext.current
 
     Card(modifier = Modifier.fillMaxWidth().padding(8.dp), elevation = CardDefaults.cardElevation(4.dp)) {
@@ -107,11 +116,8 @@ fun MovieItem(movie: MovieEntity, viewModel: MainViewModel) {
             }
 
             Checkbox(
-                checked = isChecked,
-                onCheckedChange = {
-                    isChecked = it
-                    viewModel.toggleSelection(movie, it)
-                }
+                checked = isSelected,
+                onCheckedChange = { onToggleSelection() }
             )
         }
     }
@@ -120,7 +126,7 @@ fun MovieItem(movie: MovieEntity, viewModel: MainViewModel) {
 // --- 2. ADD SCREEN ---
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AddScreen(navController: NavController, viewModel: MainViewModel) {
+fun AddScreen(navController: NavController, viewModel: MainViewModel, state: MainState) {
     var title by remember { mutableStateOf("") }
     var year by remember { mutableStateOf("") }
     var posterUrl by remember { mutableStateOf("") }
@@ -184,7 +190,7 @@ fun AddScreen(navController: NavController, viewModel: MainViewModel) {
             Button(
                 onClick = {
                     if (title.isNotBlank()) {
-                        viewModel.addMovie(title, year, posterUrl, imdbId)
+                        viewModel.handleIntent(MainIntent.AddMovie(title, year, posterUrl, imdbId))
                         navController.popBackStack()
                     }
                 },
@@ -202,27 +208,40 @@ fun AddScreen(navController: NavController, viewModel: MainViewModel) {
 fun SearchScreen(
     navController: NavController,
     viewModel: MainViewModel,
+    state: MainState,
     query: String
 ) {
     LaunchedEffect(query) {
-        viewModel.searchOnline(query, API_KEY)
+        viewModel.handleIntent(MainIntent.SearchMovies(query, API_KEY))
     }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Результаты поиска") }) }
+        topBar = { 
+            TopAppBar(
+                title = { Text("Результаты поиска") },
+                navigationIcon = {
+                    TextButton(onClick = { 
+                        viewModel.handleIntent(MainIntent.ClearSearch)
+                        navController.popBackStack() 
+                    }) {
+                        Text("Назад")
+                    }
+                }
+            ) 
+        }
     ) { padding ->
         Box(modifier = Modifier.fillMaxSize().padding(padding)) {
-            if (viewModel.isSearching) {
+            if (state.isSearching) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-            } else if (viewModel.searchError != null) {
+            } else if (state.searchError != null) {
                 Text(
-                    text = viewModel.searchError!!,
+                    text = state.searchError,
                     color = MaterialTheme.colorScheme.error,
                     modifier = Modifier.align(Alignment.Center).padding(16.dp)
                 )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(viewModel.searchResults) { movie ->
+                    items(state.searchResults) { movie ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -232,6 +251,7 @@ fun SearchScreen(
                                     navController.previousBackStackEntry?.savedStateHandle?.set("year", movie.year)
                                     navController.previousBackStackEntry?.savedStateHandle?.set("poster", movie.poster)
                                     navController.previousBackStackEntry?.savedStateHandle?.set("imdbId", movie.imdbID)
+                                    viewModel.handleIntent(MainIntent.ClearSearch)
                                     navController.popBackStack()
                                 },
                             verticalAlignment = Alignment.CenterVertically
