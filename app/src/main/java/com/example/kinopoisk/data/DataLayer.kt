@@ -10,14 +10,18 @@ import androidx.room.OnConflictStrategy
 import androidx.room.PrimaryKey
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import androidx.room.Query as RoomQuery
+import androidx.room.Query
+import com.example.kinopoisk.domain.repository.MovieRepository
+import com.example.kinopoisk.domain.usecase.AddMovieUseCase
+import com.example.kinopoisk.domain.usecase.DeleteMoviesUseCase
+import com.example.kinopoisk.domain.usecase.GetMoviesUseCase
+import com.example.kinopoisk.domain.usecase.SearchMoviesUseCase
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.flow.Flow
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
-import retrofit2.http.Query as RetrofitQuery
 import java.util.concurrent.TimeUnit
 
 // --- API MODELS ---
@@ -51,15 +55,15 @@ data class MovieEntity(
 interface OmdbApi {
     @GET("/")
     suspend fun searchMovies(
-        @RetrofitQuery("apikey") apiKey: String,
-        @RetrofitQuery("s") query: String
+        @retrofit2.http.Query("apikey") apiKey: String,
+        @retrofit2.http.Query("s") query: String
     ): OmdbSearchResponse
 }
 
 // --- ROOM DAO ---
 @Dao
 interface MovieDao {
-    @RoomQuery("SELECT * FROM movies")
+    @Query("SELECT * FROM movies")
     fun getAllMovies(): Flow<List<MovieEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
@@ -107,10 +111,23 @@ object AppContainer {
     }
     
     private lateinit var database: AppDatabase
-    lateinit var movieRepository: MovieRepository
+    
+    // Repository implementation
+    private lateinit var repository: MovieRepository
+
+    // Use Cases
+    lateinit var getMoviesUseCase: GetMoviesUseCase
+    lateinit var addMovieUseCase: AddMovieUseCase
+    lateinit var deleteMoviesUseCase: DeleteMoviesUseCase
+    lateinit var searchMoviesUseCase: SearchMoviesUseCase
 
     fun init(context: Context) {
         database = AppDatabase.getDatabase(context)
-        movieRepository = MovieRepository(api, database.movieDao())
+        repository = MovieRepositoryImpl(api, database.movieDao())
+        
+        getMoviesUseCase = GetMoviesUseCase(repository)
+        addMovieUseCase = AddMovieUseCase(repository)
+        deleteMoviesUseCase = DeleteMoviesUseCase(repository)
+        searchMoviesUseCase = SearchMoviesUseCase(repository)
     }
 }
